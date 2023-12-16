@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+shopt -s expand_aliases
+
+alias font-maker="~/Development/font-maker/font-maker"
+
+# shellcheck disable=SC2155
+declare -r command_name=$(basename "$0")
+
+set -e
+
+function main {
+  if (($# < 3)); then
+    echo "bin/$command_name <MAPPING> <OUTPUT_DIR> <INPUT_DIR> [--force] [--scale-factor 1.0]"
+    echo "For example:"
+    echo "   bin/$command_name fonts/font-mappings.yaml fonts/PBF fonts/OTF"
+    exit 42
+  fi
+
+  local -r mapping_file="$1"
+  local -r output_base_dir="$2"
+  local -r input_base_dir="$3"
+  shift 3
+
+  local -r output_temp_dir="$output_base_dir/temp"
+
+  local force
+  local -a input_font_names=()
+  local -a output_font_names=()
+  local scale_factor="1.0"
+
+  while (($# > 0)); do
+    case "$1" in
+    --force)
+      force="force deletion of existing PBFs"
+      shift
+      ;;
+    --scale-factor)
+      scale_factor="$2"
+      shift 2
+      ;;
+    *)
+      echo "[$command_name] Unknown argument $1, ignoring"
+      shift
+      ;;
+    esac
+  done
+
+  (
+    set -x
+    mkdir -p "$output_base_dir"
+  )
+
+  if [[ -d "$output_temp_dir" ]]; then
+    (
+      set -x
+      rm -r "$output_temp_dir"
+    )
+  fi
+
+  mapfile -t input_font_names < <(yq "keys | .[]" "$mapping_file")
+  mapfile -t output_font_names < <(yq "to_entries | .[] | .value" "$mapping_file")
+
+  for index in "${!input_font_names[@]}"; do
+    local input_font_file="$input_base_dir/${input_font_names[$index]}"
+
+    if [[ ! -f "$input_font_file" ]]; then
+      echo "[$command_name] Input font file $input_font_file not found, skipping"
+      continue
+    fi
+
+    if [[ -d "$output_base_dir/${output_font_names[$index]}" ]]; then
+      if [[ "$force" ]]; then
+        echo "[$command_name] Deleting existing $output_base_dir/${output_font_names[$index]} directory before PBF generation"
+        (
+          set -x
+          rm -r "${output_base_dir:?}/${output_font_names[$index]:?}"
+        )
+      else
+        echo "[$command_name] Existing $output_base_dir/${output_font_names[$index]} directory found, skipping (specify --force to overwrite)"
+        continue
+      fi
+    fi
+
+    (
+      set -x
+      font-maker --name "${output_font_names[$index]}" --scale-factor "$scale_factor" "$output_temp_dir" "$input_font_file"
+      mv "$output_temp_dir/${output_font_names[$index]}" "$output_base_dir"
+      rm -r "${output_temp_dir:?}"
+    )
+  done
+}
+
+main "$@"
