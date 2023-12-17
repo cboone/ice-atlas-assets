@@ -11,7 +11,7 @@ set -e
 
 function main {
   if (($# < 3)); then
-    echo "bin/$command_name <MAPPING> <OUTPUT_DIR> <INPUT_DIR> [--force] [--scale-factor 1.0]"
+    echo "bin/$command_name <MAPPING> <OUTPUT_DIR> <INPUT_DIR> [--force]"
     echo "For example:"
     echo "   bin/$command_name fonts/font-mappings.yaml fonts/PBF fonts/OTF"
     exit 42
@@ -25,19 +25,15 @@ function main {
   local -r output_temp_dir="$output_base_dir/temp"
 
   local force
+
   local -a input_font_names=()
   local -a output_font_names=()
-  local scale_factor="1.0"
 
   while (($# > 0)); do
     case "$1" in
     --force)
       force="force deletion of existing PBFs"
       shift
-      ;;
-    --scale-factor)
-      scale_factor="$2"
-      shift 2
       ;;
     *)
       echo "[$command_name] Unknown argument $1, ignoring"
@@ -84,7 +80,7 @@ function main {
 
     (
       set -x
-      font-maker --name "${output_font_names[$index]}" --scale-factor "$scale_factor" "$output_temp_dir" "$input_font_file"
+      font-maker --name "${output_font_names[$index]}" "$output_temp_dir" "$input_font_file"
       mv "$output_temp_dir/${output_font_names[$index]}" "$output_base_dir"
       rm -r "${output_temp_dir:?}"
     )
